@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Assign Project Report Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #eef7fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #667085;
+      --line: #d9e2ec;
+      --brand: #1769aa;
+      --brand-dark: #125487;
+      --ok: #027a48;
+      --radius: 8px;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    header { background: var(--brand); color: white; padding: 18px 24px; }
+    header h1 { margin: 0; font-size: 22px; }
+    header p { margin: 6px 0 0; font-size: 14px; opacity: .9; }
+    main { width: min(1200px, 100%); margin: 0 auto; padding: 20px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
+    h2 { margin: 0 0 14px; font-size: 18px; }
+    h3 { margin: 0 0 12px; font-size: 15px; }
+    .upload { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
+    label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+    input, select { width: 100%; border: 1px solid #b8c4d2; border-radius: 6px; padding: 10px; font-size: 14px; background: white; }
+    button { border: 0; border-radius: 6px; padding: 10px 13px; cursor: pointer; font-size: 14px; font-weight: 700; background: var(--brand); color: white; min-height: 38px; }
+    button:hover { background: var(--brand-dark); }
+    button.secondary { background: #eef4fb; color: var(--brand-dark); border: 1px solid #c8d8e8; }
+    .small { color: var(--muted); font-size: 12px; line-height: 1.4; margin: 10px 0 0; }
+    .status { display: none; margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
+    .status.show { display: block; }
+    .status.ok { background: #ecfdf3; color: var(--ok); border: 1px solid #abefc6; }
+    .status.error { background: #fff1f0; color: #b42318; border: 1px solid #f5c2bd; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .stat { padding: 14px; background: #f9fbfd; border: 1px solid var(--line); border-radius: var(--radius); }
+    .stat span { display: block; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .stat strong { display: block; margin-top: 7px; font-size: 24px; }
+    .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .chart-card { background: white; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-height: 360px; }
+    .chart-box { min-height: 285px; position: relative; }
+    .donut-report { display: grid; grid-template-columns: minmax(170px, 1fr) 220px; gap: 16px; align-items: center; height: 100%; }
+    .legend { display: grid; gap: 10px; font-size: 13px; }
+    .legend-item { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; }
+    .dot { width: 10px; height: 10px; border-radius: 999px; }
+    .bar-report { display: grid; gap: 10px; padding-top: 4px; }
+    .bar-row { display: grid; grid-template-columns: minmax(130px, 1fr) 1.7fr 48px; gap: 10px; align-items: center; font-size: 13px; }
+    .bar-track { height: 14px; background: #eef4fb; border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 999px; }
+    .chart-empty { height: 240px; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; background: white; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; }
+    th { background: #f2f6fa; color: #344054; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+    .empty { padding: 24px; text-align: center; color: var(--muted); background: white; }
+    .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+    @media (max-width: 900px) {
+      .upload, .charts, .controls { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      main { padding: 14px; }
+      .stats { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Assign Project Report Generator</h1>
+    <p>Upload your SharePoint Excel or CSV export to generate charts and statistics.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Upload Report File</h2>
+      <div class="upload">
+        <div>
+          <label for="fileInput">Excel or CSV file</label>
+          <input id="fileInput" type="file" accept=".xlsx,.xls,.csv">
+          <p class="small">Use the SharePoint list export from Assign Project Requests. This app reads the file in your browser.</p>
+        </div>
+        <button id="downloadReport" class="secondary" type="button" disabled>Download HTML Report</button>
+      </div>
+      <div class="controls">
+        <div>
+          <label for="typeColumn">Request type column</label>
+          <select id="typeColumn"></select>
+        </div>
+        <div>
+          <label for="specialistColumn">Specialist column</label>
+          <select id="specialistColumn"></select>
+        </div>
+      </div>
+      <div class="status" id="statusBox"></div>
+    </section>
+
+    <section>
+      <h2>Summary</h2>
+      <div class="stats">
+        <div class="stat"><span>Total requests</span><strong id="totalRequests">0</strong></div>
+        <div class="stat"><span>Total hours</span><strong id="totalHours">0</strong></div>
+        <div class="stat"><span>Average hours</span><strong id="averageHours">0</strong></div>
+        <div class="stat"><span>Request types</span><strong id="typeCount">0</strong></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Charts</h2>
+      <div class="charts">
+        <div class="chart-card">
+          <h3>Requests by Type</h3>
+          <div class="chart-box" id="typeChart"></div>
+        </div>
+        <div class="chart-card">
+          <h3>Requests by Specialist</h3>
+          <div class="chart-box" id="specialistChart"></div>
+        </div>
+        <div class="chart-card">
+          <h3>Estimated Hours by Request Type</h3>
+          <div class="chart-box" id="hoursChart"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Request Type Summary</h2>
+      <div class="table-wrap" id="summaryTable"></div>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const statusBox = document.getElementById('statusBox');
+    const downloadReportButton = document.getElementById('downloadReport');
+    const typeColumn = document.getElementById('typeColumn');
+    const specialistColumn = document.getElementById('specialistColumn');
+
+    let rows = [];
+    const colors = ['#6172f3', '#e31b8f', '#1b9aaa', '#8e6ac8', '#12a120', '#f79009', '#d92d20', '#1570ef'];
+
+    function showStatus(message, type = 'ok') {
+      statusBox.textContent = message;
+      statusBox.className = `status show ${type}`;
+    }
+
+    function normalize(value) {
+      return String(value || '').trim();
+    }
+
+    function getValue(row, column) {
+      return normalize(row[column]);
+    }
+
+    function findColumn(headers, candidates) {
+      const normalized = headers.map((header) => ({ raw: header, key: header.toLowerCase().replace(/[^a-z0-9]/g, '') }));
+      for (const candidate of candidates) {
+        const target = candidate.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const found = normalized.find((item) => item.key === target || item.key.includes(target));
+        if (found) return found.raw;
+      }
+      return headers[0] || '';
+    }
+
+    function populateColumnSelect(select, headers, selected) {
+      select.innerHTML = headers.map((header) => `<option value="${escapeHtml(header)}">${escapeHtml(header)}</option>`).join('');
+      select.value = selected;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function countBy(column) {
+      return rows.reduce((acc, row) => {
+        const label = getValue(row, column) || 'Blank';
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function sumHoursByType(typeCol, hoursCol) {
+      return rows.reduce((acc, row) => {
+        const label = getValue(row, typeCol) || 'Blank';
+        const hours = Number(row[hoursCol]) || 0;
+        acc[label] = (acc[label] || 0) + hours;
+        return acc;
+      }, {});
+    }
+
+    function toChartData(data) {
+      const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+      return {
+        labels: entries.map(([label]) => label),
+        values: entries.map(([, value]) => value)
+      };
+    }
+
+    function renderDonutChart(id, data) {
+      const target = document.getElementById(id);
+      const total = data.values.reduce((sum, value) => sum + value, 0);
+      if (!total) {
+        target.innerHTML = '<div class="chart-empty">No data available.</div>';
+        return;
+      }
+
+      let offset = 0;
+      const radius = 70;
+      const circumference = 2 * Math.PI * radius;
+      const segments = data.values.map((value, index) => {
+        const length = (value / total) * circumference;
+        const segment = `<circle cx="100" cy="100" r="${radius}" fill="none" stroke="${colors[index % colors.length]}" stroke-width="28" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-offset}" transform="rotate(-90 100 100)" />`;
+        offset += length;
+        return segment;
+      }).join('');
+
+      const legend = data.labels.map((label, index) => {
+        const percent = Math.round((data.values[index] / total) * 100);
+        return `<div class="legend-item"><span class="dot" style="background:${colors[index % colors.length]}"></span><span>${escapeHtml(label)}</span><strong>${data.values[index]} (${percent}%)</strong></div>`;
+      }).join('');
+
+      target.innerHTML = `
+        <div class="donut-report">
+          <div class="legend">${legend}</div>
+          <svg viewBox="0 0 200 200" role="img" aria-label="Doughnut chart">
+            <circle cx="100" cy="100" r="${radius}" fill="none" stroke="#eef4fb" stroke-width="28"></circle>
+            ${segments}
+            <circle cx="100" cy="100" r="43" fill="#ffffff"></circle>
+          </svg>
+        </div>`;
+    }
+
+    function renderBarChart(id, data) {
+      const target = document.getElementById(id);
+      const max = Math.max(...data.values, 0);
+      if (!max) {
+        target.innerHTML = '<div class="chart-empty">No data available.</div>';
+        return;
+      }
+
+      target.innerHTML = `<div class="bar-report">
+        ${data.labels.map((label, index) => {
+          const value = data.values[index];
+          const width = Math.max((value / max) * 100, 3);
+          return `<div class="bar-row">
+            <span>${escapeHtml(label)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${width}%; background:${colors[index % colors.length]}"></div></div>
+            <strong>${Number(value).toFixed(value % 1 ? 2 : 0)}</strong>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    function render() {
+      if (!rows.length) return;
+      const headers = Object.keys(rows[0] || {});
+      const typeCol = typeColumn.value;
+      const specialistCol = specialistColumn.value;
+      const hoursCol = findColumn(headers, ['Estimated Hours Completed', 'Estimated Hours', 'Hours to Complete', 'How many hours will be completed']);
+
+      const totalHours = rows.reduce((sum, row) => sum + (Number(row[hoursCol]) || 0), 0);
+      const requestTypeCount = Object.keys(countBy(typeCol)).length;
+      document.getElementById('totalRequests').textContent = rows.length;
+      document.getElementById('totalHours').textContent = totalHours.toFixed(2);
+      document.getElementById('averageHours').textContent = rows.length ? (totalHours / rows.length).toFixed(2) : '0';
+      document.getElementById('typeCount').textContent = requestTypeCount;
+
+      const typeData = toChartData(countBy(typeCol));
+      renderDonutChart('typeChart', typeData);
+      renderBarChart('specialistChart', toChartData(countBy(specialistCol)));
+      renderBarChart('hoursChart', toChartData(sumHoursByType(typeCol, hoursCol)));
+      renderSummaryTable(typeData, totalHours, typeCol, hoursCol);
+      downloadReportButton.disabled = false;
+    }
+
+    function renderSummaryTable(typeData, totalHours, typeCol, hoursCol) {
+      const hoursByType = sumHoursByType(typeCol, hoursCol);
+      if (!typeData.labels.length) {
+        document.getElementById('summaryTable').innerHTML = '<div class="empty">No data loaded.</div>';
+        return;
+      }
+      document.getElementById('summaryTable').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Request Type</th>
+              <th>Count</th>
+              <th>Percent</th>
+              <th>Total Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${typeData.labels.map((label, index) => {
+              const count = typeData.values[index];
+              const percent = rows.length ? ((count / rows.length) * 100).toFixed(1) : '0.0';
+              const hours = Number(hoursByType[label] || 0).toFixed(2);
+              return `<tr><td>${escapeHtml(label)}</td><td>${count}</td><td>${percent}%</td><td>${hours}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let value = '';
+      let quoted = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (char === '"' && quoted && next === '"') {
+          value += '"';
+          i++;
+        } else if (char === '"') {
+          quoted = !quoted;
+        } else if (char === ',' && !quoted) {
+          row.push(value);
+          value = '';
+        } else if ((char === '\n' || char === '\r') && !quoted) {
+          if (char === '\r' && next === '\n') i++;
+          row.push(value);
+          if (row.some((cell) => cell !== '')) rows.push(row);
+          row = [];
+          value = '';
+        } else {
+          value += char;
+        }
+      }
+
+      row.push(value);
+      if (row.some((cell) => cell !== '')) rows.push(row);
+
+      const headers = rows.shift() || [];
+      return rows.map((cells) => {
+        return headers.reduce((record, header, index) => {
+          record[header] = cells[index] || '';
+          return record;
+        }, {});
+      });
+    }
+
+    async function readFile(file) {
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        return parseCsv(await file.text());
+      }
+
+      if (!window.XLSX) {
+        throw new Error('Excel parser failed to load');
+      }
+
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    }
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      try {
+        rows = await readFile(file);
+        if (!rows.length) throw new Error('No rows found');
+        const headers = Object.keys(rows[0]);
+        populateColumnSelect(typeColumn, headers, findColumn(headers, ['Add Request Type', 'Request Type', 'Type of Request']));
+        populateColumnSelect(specialistColumn, headers, findColumn(headers, ['Specialist Name', 'Specialist']));
+        showStatus(`Loaded ${rows.length} request record(s).`, 'ok');
+        render();
+      } catch (error) {
+        rows = [];
+        downloadReportButton.disabled = true;
+        showStatus('Could not read this file. Please upload the SharePoint Excel or CSV export.', 'error');
+      }
+    });
+
+    [typeColumn, specialistColumn].forEach((select) => {
+      select.addEventListener('change', render);
+    });
+
+    downloadReportButton.addEventListener('click', () => {
+      const html = `<!doctype html>${document.documentElement.outerHTML}`;
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `assign-project-report-${new Date().toISOString().slice(0, 10)}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
