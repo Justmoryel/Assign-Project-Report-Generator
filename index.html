@@ -4,8 +4,8 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Assign Project Report Generator</title>
-  <script src="./Assign Project Report Generator_files/xlsx.full.min.js.download"></script>
-  <script src="./Assign Project Report Generator_files/chart.umd.min.js.download"></script>
+  <script src="./index_files/xlsx.full.min.js.download"></script>
+  <script src="./index_files/chart.umd.min.js.download"></script>
   <style>
     :root {
       --bg: #eef7fb;
@@ -276,7 +276,56 @@
         </table>`;
     }
 
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let value = '';
+      let quoted = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (char === '"' && quoted && next === '"') {
+          value += '"';
+          i++;
+        } else if (char === '"') {
+          quoted = !quoted;
+        } else if (char === ',' && !quoted) {
+          row.push(value);
+          value = '';
+        } else if ((char === '\n' || char === '\r') && !quoted) {
+          if (char === '\r' && next === '\n') i++;
+          row.push(value);
+          if (row.some((cell) => cell !== '')) rows.push(row);
+          row = [];
+          value = '';
+        } else {
+          value += char;
+        }
+      }
+
+      row.push(value);
+      if (row.some((cell) => cell !== '')) rows.push(row);
+
+      const headers = rows.shift() || [];
+      return rows.map((cells) => {
+        return headers.reduce((record, header, index) => {
+          record[header] = cells[index] || '';
+          return record;
+        }, {});
+      });
+    }
+
     async function readFile(file) {
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        return parseCsv(await file.text());
+      }
+
+      if (!window.XLSX) {
+        throw new Error('Excel parser failed to load');
+      }
+
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
